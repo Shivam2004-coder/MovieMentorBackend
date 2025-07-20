@@ -7,7 +7,7 @@ const { getTrendingMovies ,
         getTopRatedMovies ,
         getPopularMovies ,
         getNowPlayingMovies ,
-        searchMovies
+        getRecommendedMovies ,
     } = require("../Controllers/movieController");
 
 // Define the route
@@ -22,7 +22,7 @@ router.get('/popular', getPopularMovies);
 
 router.get('/now-playing', getNowPlayingMovies);
 
-router.get('/search', searchMovies);
+router.get("/gemini/recommend", getRecommendedMovies);
 
 
 

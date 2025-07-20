@@ -1,5 +1,9 @@
 // controllers/moviesController.js
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const dotenv = require("dotenv");  
 const axios = require("axios");
+dotenv.config();
+
 
 exports.getTrendingMovies = async (req, res) => {
   try {
@@ -377,83 +381,123 @@ exports.getNowPlayingMovies = async (req, res) => {
   }
 };
 
-// GET /api/movies/search?query=toy%20story
-exports.searchMovies = async (req, res) => {
+
+exports.getRecommendedMovies = async (req, res) => {
   const { query } = req.query;
   if (!query) return res.status(400).json({ error: "Query is required" });
 
   try {
-    console.log("🔎 [Controller] Searching movies for:", query);
+    console.log("✨ [Controller] Gemini recommendation for:", query);
 
-    // Search on Trakt
-    const traktRes = await axios.get(`https://api.trakt.tv/search/movie`, {
-      headers: {
-        "Content-Type": "application/json",
-        "trakt-api-version": "2",
-        "trakt-api-key": process.env.TRAKT_CLIENT_ID,
-      },
-      params: { query, limit: 5 },
-    });
+    // Build Gemini prompt
+    const GeminiQuery =
+      "Act as a movie Recommendation System and suggest some movies for the query : " +
+      query +
+      ". Only give me names of 5 movies, comma separated like the example result given ahead." +
+      " Example: <movie_name1>, <movie_name2>, <movie_name3>, <movie_name4>, <movie_name5>";
 
-    const traktData = traktRes.data; // Array of { movie: {...}, type: "movie" }
+    // Call Gemini API
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(GeminiQuery);
 
-    // Enrich each with OMDb
-    const enrichedMovies = await Promise.all(
-      traktData.map(async (item) => {
-        const m = item.movie;
-        if (!m.ids?.imdb) {
-          return {
-            id: m.ids?.trakt,
-            title: m.title,
-            year: m.year,
-            overview: null,
-            tagline: null,
-            vote_average: null,
-            runtime: null,
-            release_date: null,
-            poster: null,
-          };
-        }
+    const rawText =
+      result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const movieNames = rawText
+      .split(",")
+      .map((m) => m.trim())
+      .filter((m) => m.length > 0);
+
+    console.log("✅ Gemini suggested:", movieNames);
+
+    // For each movie name, perform a search (returning an array of results)
+    const movies = await Promise.all(
+      movieNames.map(async (name) => {
         try {
-          const omdbRes = await axios.get(
-            `https://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&i=${m.ids.imdb}`
+          // Use Trakt's search to get multiple results
+          const traktRes = await axios.get(`https://api.trakt.tv/search/movie`, {
+            headers: {
+              "Content-Type": "application/json",
+              "trakt-api-version": "2",
+              "trakt-api-key": process.env.TRAKT_CLIENT_ID,
+            },
+            params: { query: name, limit: 5 }, // fetch up to 5 search results
+          });
+
+          if (!traktRes.data || traktRes.data.length === 0) {
+            return [];
+          }
+
+          // For each result, try to enrich with OMDb
+          const enrichedResults = await Promise.all(
+            traktRes.data.map(async (result) => {
+              const m = result.movie;
+              if (!m?.ids?.imdb) {
+                return {
+                  id: m.ids?.trakt || null,
+                  title: m.title,
+                  year: m.year,
+                  overview: null,
+                  tagline: null,
+                  vote_average: null,
+                  runtime: null,
+                  release_date: null,
+                  poster: null,
+                };
+              }
+
+              try {
+                const omdbRes = await axios.get(
+                  `https://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&i=${m.ids.imdb}`
+                );
+                const omdb = omdbRes.data;
+                return {
+                  id: m.ids.imdb,
+                  title: omdb.Title || m.title,
+                  year: omdb.Year || m.year,
+                  overview: omdb.Plot !== "N/A" ? omdb.Plot : null,
+                  tagline: omdb.Genre !== "N/A" ? omdb.Genre : null,
+                  vote_average: omdb.imdbRating !== "N/A" ? omdb.imdbRating : null,
+                  runtime: omdb.Runtime !== "N/A" ? omdb.Runtime : null,
+                  release_date: omdb.Released !== "N/A" ? omdb.Released : null,
+                  poster: omdb.Poster !== "N/A" ? omdb.Poster : null,
+                };
+              } catch (innerErr) {
+                console.error("🔥 OMDb enrich failed for:", m.title, innerErr.message);
+                return {
+                  id: m.ids?.trakt || null,
+                  title: m.title,
+                  year: m.year,
+                  overview: null,
+                  tagline: null,
+                  vote_average: null,
+                  runtime: null,
+                  release_date: null,
+                  poster: null,
+                };
+              }
+            })
           );
-          const omdb = omdbRes.data;
-          return {
-            id: m.ids.imdb,
-            title: omdb.Title || m.title,
-            year: omdb.Year || m.year,
-            overview: omdb.Plot !== "N/A" ? omdb.Plot : null,
-            tagline: omdb.Genre !== "N/A" ? omdb.Genre : null,
-            vote_average: omdb.imdbRating !== "N/A" ? omdb.imdbRating : null,
-            runtime: omdb.Runtime !== "N/A" ? omdb.Runtime : null,
-            release_date: omdb.Released !== "N/A" ? omdb.Released : null,
-            poster: omdb.Poster !== "N/A" ? omdb.Poster : null,
-          };
+
+          // console.log(`✅ Enriched ${enrichedResults.length} results for:`, name);
+
+          return enrichedResults; // returns an array
         } catch (err) {
-          console.error("🔥 [Controller] OMDb fetch failed for", m.title, err.message);
-          return {
-            id: m.ids.imdb,
-            title: m.title,
-            year: m.year,
-            overview: null,
-            tagline: null,
-            vote_average: null,
-            runtime: null,
-            release_date: null,
-            poster: null,
-          };
+          console.error("🔥 Search failed for:", name, err.message);
+          return [];
         }
       })
     );
 
-    res.json(enrichedMovies);
+    res.json({ movieNames, movies }); // movies is now an array of arrays
   } catch (err) {
-    console.error("🔥 [Controller] Search error:", err.message);
-    res.status(500).json({ error: "Failed to search movies", details: err.message });
+    console.error("🔥 [Controller] Gemini error:", err.message);
+    res.status(500).json({
+      error: "Failed to get Gemini recommendations",
+      details: err.message,
+    });
   }
 };
-
 
 exports.getMovieById = async (req, res) => {
   const { id } = req.params; // IMDb id like "tt26743210"
