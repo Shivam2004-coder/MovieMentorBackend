@@ -49,7 +49,7 @@ movie-mentor-backend/
 
 - **Node.js**
 - **Express.js**
-- **TMDB API** – for movie and TV show data
+- **OMDB API**, **TRAKT API** – for movie and TV show data
 - **Gemini (Google AI)** – for recommendation engine
 - **dotenv** – for managing environment variables
 
