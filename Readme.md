@@ -62,7 +62,7 @@ The route /gemini/recommend integrates Google Gemini API to provide smart recomm
 
 ### 1. Clone the Repository
 
-git clone https://github.com/your-username/movie-mentor-backend.git
+git clone https://github.com/Shivam2004-coder/MovieMentorBackend.git
 cd movie-mentor-backend
 
 ### 2. Install Dependencies
