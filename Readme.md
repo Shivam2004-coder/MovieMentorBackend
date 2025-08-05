@@ -74,12 +74,12 @@ npm install
 ### 3. Create Environment Variables
 Create a .env file in the root folder and add your API keys:
 
-PORT=5000
-TRAKT_CLIENT_ID=your_trakt_client_id
-TRAKT_CLIENT_SECRET=your_trakt_client_secret
-OMDB_API_KEY=your_omdb_api_key
-YOUTUBE_API_KEY=your_youtube_api_key
-GEMINI_API_KEY=your_gemini_api_key
+- **PORT=5000**
+- **TRAKT_CLIENT_ID=your_trakt_client_id**
+- **TRAKT_CLIENT_SECRET=your_trakt_client_secret**
+- **OMDB_API_KEY=your_omdb_api_key**
+- **YOUTUBE_API_KEY=your_youtube_api_key**
+- **GEMINI_API_KEY=your_gemini_api_key**
 
 ### 4. Run the Server
 
